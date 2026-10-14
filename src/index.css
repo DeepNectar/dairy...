@@ -1,1 +1,102 @@
 @import "tailwindcss";
+
+/* Custom scrollbar for the diary */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4a574;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b8884d;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Textarea custom styling */
+textarea {
+  font-family: 'Georgia', serif;
+  line-height: 1.8;
+}
+
+textarea::placeholder {
+  font-style: italic;
+}
+
+/* Selection color */
+::selection {
+  background-color: #fbbf24;
+  color: #78350f;
+}
+
+/* Entry content styling */
+.prose p {
+  font-family: 'Georgia', serif;
+}
+
+/* Animation for new entries */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Focus styles */
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .prose p {
+    font-size: 0.95rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  header,
+  aside,
+  button {
+    display: none !important;
+  }
+  
+  main {
+    padding: 0 !important;
+  }
+  
+  .bg-white\/80 {
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
