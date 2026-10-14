@@ -6,11 +6,33 @@ function App() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [mood, setMood] = useState("");
+  const [category, setCategory] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [view, setView] = useState("cover");
   const [isFlipping, setIsFlipping] = useState(false);
   const [showIndex, setShowIndex] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
+  const [currentCategory, setCurrentCategory] = useState<string | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
   const textareaRef = useRef<any>(null);
+
+  const categories = [
+    { id: "greetings", emoji: "🌅", name: "Morning & Night Greetings" },
+    { id: "daily", emoji: "💬", name: "Daily Life & Important Updates" },
+    { id: "compliments", emoji: "💖", name: "Sweet Compliments & Love" },
+    { id: "kesha", emoji: "👨‍👩‍👧‍👦", name: "About Kesha (Her Sister)" },
+    { id: "arya", emoji: "👨‍👩‍👧‍👦", name: "About Arya (Her Brother)" },
+    { id: "dreams", emoji: "🎯", name: "Dreams & Future Plans" },
+    { id: "support", emoji: "🤗", name: "Emotional Support & Care" },
+    { id: "fun", emoji: "😄", name: "Fun Moments & Jokes" },
+    { id: "flirty", emoji: "🔥", name: "Flirty Banter & Teasing" },
+    { id: "romantic", emoji: "💕", name: "Romantic Confessions" },
+    { id: "attraction", emoji: "💘", name: "Attraction & Desire" },
+    { id: "intimate", emoji: "🌙", name: "Intimate & Passionate Talks" },
+    { id: "chemistry", emoji: "💝", name: "Deep Chemistry & Connection" },
+    { id: "no-reply", emoji: "💭", name: "My Messages To Her (No Reply Yet)" },
+    { id: "her-messages", emoji: "💌", name: "Her Messages To Me" },
+  ];
 
   useEffect(() => {
     const saved = localStorage.getItem("diary_entries");
@@ -72,7 +94,11 @@ function App() {
     setTitle("");
     setContent("");
     setMood("");
+    setCategory("");
     setShowIndex(false);
+    setShowCategories(false);
+    setShowSummary(false);
+    setCurrentCategory(null);
     flipTo("write");
   };
 
@@ -82,11 +108,11 @@ function App() {
     if (currentEntry) {
       const updated = entries.map((entry: any) =>
         entry.id === currentEntry.id
-          ? { ...entry, title: title.trim() || "Untitled", content: content.trim(), mood, updatedAt: now }
+          ? { ...entry, title: title.trim() || "Untitled", content: content.trim(), mood, category, updatedAt: now }
           : entry
       );
       setEntries(updated);
-      const saved = { ...currentEntry, title: title.trim() || "Untitled", content: content.trim(), mood, updatedAt: now };
+      const saved = { ...currentEntry, title: title.trim() || "Untitled", content: content.trim(), mood, category, updatedAt: now };
       setCurrentEntry(saved);
     } else {
       const newEntry = {
@@ -94,6 +120,7 @@ function App() {
         title: title.trim() || "Untitled",
         content: content.trim(),
         mood,
+        category,
         createdAt: now,
         updatedAt: now,
       };
@@ -108,7 +135,10 @@ function App() {
     setTitle(entry.title);
     setContent(entry.content);
     setMood(entry.mood);
+    setCategory(entry.category || "");
     setShowIndex(false);
+    setShowCategories(false);
+    setShowSummary(false);
     flipTo("write");
   };
 
@@ -117,7 +147,10 @@ function App() {
     setTitle(entry.title);
     setContent(entry.content);
     setMood(entry.mood);
+    setCategory(entry.category || "");
     setShowIndex(false);
+    setShowCategories(false);
+    setShowSummary(false);
     flipTo("read");
   };
 
@@ -162,6 +195,16 @@ function App() {
     return entry.title.toLowerCase().includes(query) || entry.content.toLowerCase().includes(query);
   });
 
+  const entriesByCategory = (catId: string) => {
+    return entries
+      .filter((entry: any) => entry.category === catId)
+      .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  };
+
+  const getCategoryInfo = (catId: string) => {
+    return categories.find((c) => c.id === catId);
+  };
+
   const getMoodEmoji = (moodLabel: string) => {
     const found = moods.find((m) => m.label === moodLabel);
     return found ? found.emoji : "";
@@ -181,6 +224,26 @@ function App() {
   const currentIndex = currentEntry ? entries.findIndex((e: any) => e.id === currentEntry.id) : -1;
   const hasPrev = currentIndex < entries.length - 1;
   const hasNext = currentIndex > 0;
+
+  const getDateRange = () => {
+    if (entries.length === 0) return "";
+    const sorted = [...entries].sort((a: any, b: any) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    const oldest = formatShortDate(sorted[0].createdAt);
+    const newest = formatShortDate(sorted[sorted.length - 1].createdAt);
+    return `${oldest} — ${newest}`;
+  };
+
+  const generateSummary = () => {
+    if (entries.length === 0) return "No entries yet to summarize.";
+    
+    const totalWords = entries.reduce((sum, entry) => sum + getWordCount(entry.content), 0);
+    const categoriesUsed = [...new Set(entries.map((e: any) => e.category).filter(Boolean))];
+    const moodsUsed = [...new Set(entries.map((e: any) => e.mood).filter(Boolean))];
+    
+    return `This diary contains ${entries.length} entries spanning from ${getDateRange()}, with a total of ${totalWords} words written across ${categoriesUsed.length} different categories. The entries capture a beautiful journey of connection, from daily greetings and sweet compliments to deep romantic confessions and intimate moments. Each page reflects genuine emotions, from moments of joy and laughter to times of longing and anticipation. The bond shared here is built on consistent communication, emotional support, and a chemistry that grows stronger with every interaction. Through flirty banter, heartfelt conversations, and passionate exchanges, this diary preserves the essence of a relationship that is both tender and intense. Every entry, whether a simple good morning or a deeply personal confession, contributes to the tapestry of memories that define this special connection.`;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-800 via-stone-700 to-stone-900 flex items-center justify-center p-2 md:p-8 overflow-hidden">
@@ -218,11 +281,9 @@ function App() {
               background: "linear-gradient(to right, #5c1a1a, #8b2020, #6b1c1c, #4a1515)",
             }}
           >
-            {/* Spine texture */}
             <div className="absolute inset-0 opacity-20" style={{
               backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.05) 3px, rgba(255,255,255,0.05) 4px)`,
             }} />
-            {/* Gold bands */}
             <div className="w-full h-0.5 bg-gradient-to-r from-yellow-700/60 via-yellow-500/80 to-yellow-700/60" />
             <div className="flex-1 flex items-center justify-center">
               <div className="text-yellow-300/70 text-[7px] md:text-[9px] font-serif tracking-[0.3em] uppercase"
@@ -232,7 +293,6 @@ function App() {
               </div>
             </div>
             <div className="w-full h-0.5 bg-gradient-to-r from-yellow-700/60 via-yellow-500/80 to-yellow-700/60" />
-            {/* Spine shadow */}
             <div className="absolute right-0 top-0 bottom-0 w-2 bg-gradient-to-l from-black/20 to-transparent" />
           </div>
 
@@ -240,7 +300,6 @@ function App() {
           <div className="flex-1 relative overflow-hidden" style={{
             background: "#faf6ee",
           }}>
-            {/* Page edge lines (stacked pages effect) */}
             <div className="absolute right-0 top-0 bottom-0 flex flex-col">
               <div className="w-[3px] h-full bg-gradient-to-l from-stone-300/80 to-transparent" />
               <div className="absolute right-[3px] top-0 bottom-0 w-[1px] bg-stone-200/60" />
@@ -261,16 +320,13 @@ function App() {
                     background: "linear-gradient(160deg, #f5e6c8 0%, #e8c97a 40%, #d4a843 100%)",
                   }}
                 >
-                  {/* Leather texture overlay */}
                   <div className="absolute inset-0 opacity-[0.08]" style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 20.5C20 16.36 16.64 13 12.5 13H0v-2h12.5C17.75 11 22 15.25 22 20.5S17.75 30 12.5 30H0v-2h12.5C16.64 28 20 24.64 20 20.5z' fill='%23000' fill-opacity='0.4' fill-rule='evenodd'/%3E%3C/svg%3E")`,
+                    backgroundImage: `url("image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 20.5C20 16.36 16.64 13 12.5 13H0v-2h12.5C17.75 11 22 15.25 22 20.5S17.75 30 12.5 30H0v-2h12.5C16.64 28 20 24.64 20 20.5z' fill='%23000' fill-opacity='0.4' fill-rule='evenodd'/%3E%3C/svg%3E")`,
                   }} />
 
-                  {/* Decorative border frame */}
                   <div className="absolute inset-4 md:inset-8 border-2 border-amber-900/25 rounded-sm" />
                   <div className="absolute inset-5 md:inset-9 border border-amber-900/15 rounded-sm" />
                   
-                  {/* Corner ornaments */}
                   <div className="absolute top-6 left-6 md:top-10 md:left-10 text-amber-900/30 text-xl md:text-2xl">✦</div>
                   <div className="absolute top-6 right-6 md:top-10 md:right-10 text-amber-900/30 text-xl md:text-2xl">✦</div>
                   <div className="absolute bottom-6 left-6 md:bottom-10 md:left-10 text-amber-900/30 text-xl md:text-2xl">✦</div>
@@ -288,10 +344,15 @@ function App() {
                       <span className="text-amber-800/50 text-xs">❧</span>
                       <div className="w-8 md:w-16 h-px bg-amber-800/40" />
                     </div>
-                    <p className="font-serif text-amber-900/60 text-xs md:text-sm italic mb-4 md:mb-6">
+                    <p className="font-serif text-amber-900/60 text-xs md:text-sm italic mb-2 md:mb-3">
                       A collection of thoughts & memories
                     </p>
-                    <p className="font-serif text-amber-800/50 text-xs mb-6 md:mb-8">
+                    {entries.length > 0 && (
+                      <p className="font-serif text-amber-800/40 text-[10px] md:text-xs mb-3 md:mb-4">
+                        {getDateRange()}
+                      </p>
+                    )}
+                    <p className="font-serif text-amber-800/50 text-xs mb-4 md:mb-6">
                       — {new Date().getFullYear()} —
                     </p>
                     <button
@@ -302,12 +363,26 @@ function App() {
                       ✦ Write a New Page ✦
                     </button>
                     {entries.length > 0 && (
-                      <button
-                        onClick={() => setShowIndex(!showIndex)}
-                        className="mt-3 md:mt-4 block mx-auto px-4 py-2 text-amber-800/60 hover:text-amber-900 font-serif text-[10px] md:text-xs tracking-wide transition-colors"
-                      >
-                        📖 Table of Contents ({entries.length} {entries.length === 1 ? "page" : "pages"})
-                      </button>
+                      <div className="mt-3 md:mt-4 flex flex-col gap-1">
+                        <button
+                          onClick={() => setShowIndex(!showIndex)}
+                          className="block mx-auto px-4 py-1.5 text-amber-800/60 hover:text-amber-900 font-serif text-[10px] md:text-xs tracking-wide transition-colors"
+                        >
+                          📖 Table of Contents ({entries.length} {entries.length === 1 ? "page" : "pages"})
+                        </button>
+                        <button
+                          onClick={() => setShowCategories(!showCategories)}
+                          className="block mx-auto px-4 py-1.5 text-amber-800/60 hover:text-amber-900 font-serif text-[10px] md:text-xs tracking-wide transition-colors"
+                        >
+                          📑 Browse by Category
+                        </button>
+                        <button
+                          onClick={() => setShowSummary(!showSummary)}
+                          className="block mx-auto px-4 py-1.5 text-amber-800/60 hover:text-amber-900 font-serif text-[10px] md:text-xs tracking-wide transition-colors"
+                        >
+                          📝 Final Summary
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -344,6 +419,11 @@ function App() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     {entry.mood && <span className="text-xs md:text-sm">{getMoodEmoji(entry.mood)}</span>}
+                                    {entry.category && (
+                                      <span className="text-[9px] md:text-[10px] text-amber-600/50 font-serif">
+                                        {getCategoryInfo(entry.category)?.emoji}
+                                      </span>
+                                    )}
                                     <span className="font-serif text-amber-900 text-xs md:text-sm truncate">{entry.title}</span>
                                   </div>
                                   <span className="text-amber-500/70 text-[10px] md:text-xs font-serif">{formatShortDate(entry.createdAt)}</span>
@@ -358,6 +438,107 @@ function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* Categories overlay */}
+                  {showCategories && (
+                    <div className="absolute inset-0 bg-[#faf6ee]/97 backdrop-blur-sm z-20 overflow-y-auto">
+                      <div className="p-6 md:p-10 max-w-lg mx-auto">
+                        <div className="flex items-center justify-between mb-4 md:mb-6 border-b border-amber-300/50 pb-3">
+                          <h2 className="font-serif text-lg md:text-xl text-amber-900 font-bold">Browse by Category</h2>
+                          <button onClick={() => setShowCategories(false)} className="text-amber-600 hover:text-amber-800 text-lg p-1">✕</button>
+                        </div>
+                        <div className="space-y-2">
+                          {categories.map((cat) => {
+                            const count = entriesByCategory(cat.id).length;
+                            return (
+                              <div
+                                key={cat.id}
+                                onClick={() => {
+                                  setCurrentCategory(cat.id);
+                                  setShowCategories(false);
+                                  setView("category");
+                                }}
+                                className="flex items-center gap-3 p-3 rounded-sm hover:bg-amber-100/60 cursor-pointer group transition-colors border-b border-amber-200/30"
+                              >
+                                <span className="text-lg md:text-xl">{cat.emoji}</span>
+                                <div className="flex-1">
+                                  <span className="font-serif text-amber-900 text-xs md:text-sm">{cat.name}</span>
+                                  <span className="block text-amber-500/60 text-[10px] md:text-xs font-serif">
+                                    {count} {count === 1 ? "entry" : "entries"}
+                                  </span>
+                                </div>
+                                <svg className="w-3 h-3 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary overlay */}
+                  {showSummary && (
+                    <div className="absolute inset-0 bg-[#faf6ee]/97 backdrop-blur-sm z-20 overflow-y-auto">
+                      <div className="p-6 md:p-10 max-w-lg mx-auto">
+                        <div className="flex items-center justify-between mb-4 md:mb-6 border-b border-amber-300/50 pb-3">
+                          <h2 className="font-serif text-lg md:text-xl text-amber-900 font-bold">📝 Final Summary</h2>
+                          <button onClick={() => setShowSummary(false)} className="text-amber-600 hover:text-amber-800 text-lg p-1">✕</button>
+                        </div>
+                        <div className="font-serif text-amber-900/80 text-sm md:text-base leading-relaxed">
+                          {generateSummary()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* === CATEGORY VIEW === */}
+              {view === "category" && currentCategory && (
+                <div className="w-full h-full flex flex-col relative" style={{
+                  background: "#faf6ee",
+                }}>
+                  <div className="p-6 md:p-10 overflow-y-auto">
+                    <div className="flex items-center justify-between mb-6 border-b border-amber-300/50 pb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl md:text-3xl">{getCategoryInfo(currentCategory)?.emoji}</span>
+                        <h2 className="font-serif text-lg md:text-xl text-amber-900 font-bold">
+                          {getCategoryInfo(currentCategory)?.name}
+                        </h2>
+                      </div>
+                      <button onClick={() => flipTo("cover")} className="text-amber-600 hover:text-amber-800 text-sm font-serif">
+                        ← Back
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {entriesByCategory(currentCategory).length === 0 ? (
+                        <p className="text-amber-600/50 font-serif text-sm text-center py-8 italic">
+                          No entries in this category yet...
+                        </p>
+                      ) : (
+                        entriesByCategory(currentCategory).map((entry: any) => (
+                          <div
+                            key={entry.id}
+                            onClick={() => handleReadEntry(entry)}
+                            className="p-4 rounded-sm hover:bg-amber-100/60 cursor-pointer transition-colors border border-amber-200/40"
+                          >
+                            <div className="flex items-start gap-2 mb-2">
+                              {entry.mood && <span className="text-base">{getMoodEmoji(entry.mood)}</span>}
+                              <div className="flex-1">
+                                <h3 className="font-serif text-amber-900 text-sm md:text-base font-bold">{entry.title}</h3>
+                                <p className="text-amber-500/60 text-[10px] md:text-xs font-serif">{formatDate(entry.createdAt)}</p>
+                              </div>
+                            </div>
+                            <p className="font-serif text-amber-800/70 text-xs md:text-sm line-clamp-3">
+                              {entry.content}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -376,21 +557,21 @@ function App() {
                   backgroundColor: "#faf6ee",
                   backgroundPositionY: "8px",
                 }}>
-                  {/* Red margin line */}
                   <div className="absolute left-10 md:left-14 top-0 bottom-0 w-[1px] bg-red-400/40" />
                   
-                  {/* Hole punches */}
                   <div className="absolute left-2 md:left-3 top-[20%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20 shadow-inner" />
                   <div className="absolute left-2 md:left-3 top-[50%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20 shadow-inner" />
                   <div className="absolute left-2 md:left-3 top-[80%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20 shadow-inner" />
 
-                  {/* Page Header */}
                   <div className="pt-5 md:pt-7 pl-12 md:pl-18 pr-5 md:pr-8 pb-1 shrink-0" style={{ paddingLeft: "clamp(3rem, 5vw, 4.5rem)" }}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {currentEntry.mood && (
                             <span className="text-base md:text-lg">{getMoodEmoji(currentEntry.mood)}</span>
+                          )}
+                          {currentEntry.category && (
+                            <span className="text-xs md:text-sm">{getCategoryInfo(currentEntry.category)?.emoji}</span>
                           )}
                           <span className="text-[10px] md:text-xs text-amber-600/60 font-serif italic">
                             {currentEntry.mood || ""}
@@ -427,7 +608,6 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Content */}
                   <div className="flex-1 overflow-y-auto pr-5 md:pr-8 pb-14" style={{ paddingLeft: "clamp(3rem, 5vw, 4.5rem)" }}>
                     <div className="font-serif text-amber-950/75 text-sm md:text-[15px] leading-[32px]">
                       {currentEntry.content.split("\n").map((paragraph: string, index: number) => (
@@ -438,7 +618,6 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Page Footer */}
                   <div className="absolute bottom-3 left-0 right-0 flex justify-between items-center px-6 md:px-10">
                     <button
                       onClick={goToPrevEntry}
@@ -463,7 +642,6 @@ function App() {
                     </button>
                   </div>
 
-                  {/* Back to cover link */}
                   <button
                     onClick={() => flipTo("cover")}
                     className="absolute top-3 right-4 md:right-6 text-[9px] md:text-[10px] text-amber-500/40 hover:text-amber-700 font-serif transition-colors"
@@ -488,15 +666,12 @@ function App() {
                   backgroundColor: "#faf6ee",
                   backgroundPositionY: "8px",
                 }}>
-                  {/* Red margin line */}
                   <div className="absolute left-10 md:left-14 top-0 bottom-0 w-[1px] bg-red-400/40" />
                   
-                  {/* Hole punches */}
                   <div className="absolute left-2 md:left-3 top-[20%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20 shadow-inner" />
                   <div className="absolute left-2 md:left-3 top-[50%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20 shadow-inner" />
                   <div className="absolute left-2 md:left-3 top-[80%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20 shadow-inner" />
 
-                  {/* Write Header */}
                   <div className="pt-4 md:pt-6 pr-5 md:pr-8 pb-0 shrink-0" style={{ paddingLeft: "clamp(3rem, 5vw, 4.5rem)" }}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] md:text-xs text-amber-600/40 font-serif italic">
@@ -518,7 +693,6 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Title */}
                     <input
                       type="text"
                       placeholder="Title..."
@@ -527,7 +701,6 @@ function App() {
                       className="w-full font-serif text-lg md:text-2xl text-amber-950 font-bold bg-transparent border-none outline-none placeholder-amber-400/40 leading-[32px]"
                     />
 
-                    {/* Mood */}
                     <div className="flex items-center gap-1 md:gap-1.5 mt-0.5 flex-wrap">
                       <span className="text-[9px] md:text-[10px] text-amber-600/40 font-serif mr-0.5">Mood:</span>
                       {moods.map((m) => (
@@ -543,9 +716,24 @@ function App() {
                         </button>
                       ))}
                     </div>
+
+                    <div className="mt-1">
+                      <span className="text-[9px] md:text-[10px] text-amber-600/40 font-serif mr-1">Category:</span>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="text-[10px] md:text-xs font-serif text-amber-800 bg-transparent border border-amber-300/40 rounded-sm px-2 py-0.5 focus:outline-none focus:border-amber-400"
+                      >
+                        <option value="">Select category...</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.emoji} {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
-                  {/* Writing Area */}
                   <div className="flex-1 overflow-y-auto pr-5 md:pr-8 pb-14" style={{ paddingLeft: "clamp(3rem, 5vw, 4.5rem)" }}>
                     <textarea
                       ref={textareaRef}
@@ -557,7 +745,6 @@ function App() {
                     />
                   </div>
 
-                  {/* Page Footer */}
                   <div className="absolute bottom-3 left-0 right-0 flex justify-between items-center px-6 md:px-10">
                     <span className="text-[10px] text-amber-400/40 font-serif italic">
                       {getWordCount(content)} words
@@ -572,7 +759,6 @@ function App() {
           </div>
         </div>
 
-        {/* Book bottom edge (stacked pages) */}
         <div className="absolute -bottom-[2px] left-7 md:left-10 right-0 h-[3px] rounded-b-sm"
           style={{ background: "linear-gradient(to bottom, #e8dcc8, #d4c4a8)" }}
         />
@@ -584,7 +770,6 @@ function App() {
         />
       </div>
 
-      {/* Bookmark ribbon */}
       <div className="absolute top-0 z-20 pointer-events-none" style={{ right: "12%" }}>
         <div className="w-4 md:w-5 h-14 md:h-20"
           style={{
