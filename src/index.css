@@ -1,8 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Playfair+Display:wght@400;700;900&display=swap');
 @import "tailwindcss";
 
-/* Custom scrollbar for the diary */
+/* Base styles */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Crimson Text', Georgia, serif;
+}
+
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -11,28 +25,11 @@
 
 ::-webkit-scrollbar-thumb {
   background: #d4a574;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #b8884d;
-}
-
-/* Smooth transitions */
-* {
-  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
-/* Textarea custom styling */
-textarea {
-  font-family: 'Georgia', serif;
-  line-height: 1.8;
-}
-
-textarea::placeholder {
-  font-style: italic;
 }
 
 /* Selection color */
@@ -41,32 +38,60 @@ textarea::placeholder {
   color: #78350f;
 }
 
-/* Entry content styling */
-.prose p {
-  font-family: 'Georgia', serif;
+/* Font classes */
+.font-serif {
+  font-family: 'Crimson Text', Georgia, serif;
 }
 
-/* Animation for new entries */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
+/* Textarea and input styling */
+textarea,
+input[type="text"] {
+  font-family: 'Crimson Text', Georgia, serif;
+}
+
+textarea::placeholder,
+input::placeholder {
+  font-style: italic;
+}
+
+/* Page flip animation */
+@keyframes pageFlip {
+  0% {
+    transform: perspective(1200px) rotateY(0deg);
     opacity: 1;
-    transform: translateY(0);
+  }
+  50% {
+    transform: perspective(1200px) rotateY(-15deg);
+    opacity: 0.5;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg);
+    opacity: 1;
   }
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+/* Paper texture noise */
+.paper-texture {
+  position: relative;
+}
+
+.paper-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+/* Writing mode vertical */
+.writing-mode-vertical {
+  writing-mode: vertical-rl;
+}
+
+/* Smooth transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Focus styles */
@@ -75,28 +100,80 @@ textarea:focus {
   outline: none;
 }
 
-/* Mobile optimizations */
-@media (max-width: 768px) {
-  .prose p {
-    font-size: 0.95rem;
+/* Lined paper effect for content */
+.lined-paper {
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 31px,
+    #e8d5b7 31px,
+    #e8d5b7 32px
+  );
+  background-size: 100% 32px;
+}
+
+/* Book shadow effects */
+.book-shadow {
+  box-shadow: 
+    5px 5px 15px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Page curl effect */
+@keyframes subtle-curl {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(0.5deg);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .font-serif {
+    font-size: 0.9em;
   }
 }
 
 /* Print styles */
 @media print {
-  header,
-  aside,
-  button {
+  body {
+    background: white !important;
+  }
+  
+  .no-print {
     display: none !important;
   }
-  
-  main {
-    padding: 0 !important;
+}
+
+/* A4 aspect ratio container helper */
+.a4-ratio {
+  aspect-ratio: 210 / 297;
+}
+
+/* Decorative text styles */
+.ornamental {
+  letter-spacing: 0.2em;
+}
+
+/* Cover page decorations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
   }
-  
-  .bg-white\/80 {
-    background: white !important;
-    box-shadow: none !important;
-    border: none !important;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
+
+.cover-content > * {
+  animation: fadeInUp 0.6s ease-out backwards;
+}
+
+.cover-content > *:nth-child(1) { animation-delay: 0.1s; }
+.cover-content > *:nth-child(2) { animation-delay: 0.2s; }
+.cover-content > *:nth-child(3) { animation-delay: 0.3s; }
+.cover-content > *:nth-child(4) { animation-delay: 0.4s; }
+.cover-content > *:nth-child(5) { animation-delay: 0.5s; }
