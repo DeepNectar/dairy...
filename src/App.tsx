@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
 function App() {
   const [entries, setEntries] = useState<any[]>([]);
@@ -7,11 +8,13 @@ function App() {
   const [flipDirection, setFlipDirection] = useState<"next" | "prev" | null>(null);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const [templateFormat, setTemplateFormat] = useState<"text" | "json">("text");
   const [importText, setImportText] = useState("");
   const [importStatus, setImportStatus] = useState("");
   const [editingEntry, setEditingEntry] = useState<any>(null);
   const [isWriting, setIsWriting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<any>(null);
 
   // Form states
@@ -51,21 +54,91 @@ function App() {
     { emoji: "🤔", label: "Thoughtful" }, { emoji: "😎", label: "Confident" },
   ];
 
-  // Load from localStorage
+  // Load from Supabase
   useEffect(() => {
-    const saved = localStorage.getItem("diary_entries");
-    if (saved) {
-      try { setEntries(JSON.parse(saved)); } catch (e) {}
+    if (!isSupabaseConfigured()) {
+      setIsLoading(false);
+      return;
     }
+    loadEntries();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("diary_entries", JSON.stringify(entries));
-  }, [entries]);
+  const loadEntries = async () => {
+    if (!isSupabaseConfigured()) return;
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from("diary_entries")
+      .select("*")
+      .order("created_at", { ascending: true });
+    
+    if (error) {
+      console.error("Error loading entries:", error);
+      setImportStatus("❌ Error loading from Supabase: " + error.message);
+    } else {
+      // Map Supabase snake_case to app camelCase
+      const mappedEntries = (data || []).map((entry: any) => ({
+        ...entry,
+        whatIFelt: entry.what_i_felt,
+        createdAt: entry.created_at,
+        updatedAt: entry.updated_at,
+      }));
+      setEntries(mappedEntries);
+    }
+    setIsLoading(false);
+  };
+
+  const saveEntryToSupabase = async (entry: any) => {
+    if (!isSupabaseConfigured()) return null;
+    const { data, error } = await supabase
+      .from("diary_entries")
+      .insert([entry])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("Error saving entry:", error);
+      return null;
+    }
+    return data;
+  };
+
+  const updateEntryInSupabase = async (id: string, updates: any) => {
+    if (!isSupabaseConfigured()) return null;
+    const { data, error } = await supabase
+      .from("diary_entries")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("Error updating entry:", error);
+      return null;
+    }
+    return data;
+  };
+
+  const deleteEntryFromSupabase = async (id: string) => {
+    if (!isSupabaseConfigured()) return false;
+    const { error } = await supabase
+      .from("diary_entries")
+      .delete()
+      .eq("id", id);
+    
+    if (error) {
+      console.error("Error deleting entry:", error);
+      return false;
+    }
+    return true;
+  };
 
   // Sort entries chronologically
   const sortedEntries = [...entries].sort(
-    (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    (a: any, b: any) => {
+      const dateA = a.createdAt || a.created_at;
+      const dateB = b.createdAt || b.created_at;
+      return new Date(dateA).getTime() - new Date(dateB).getTime();
+    }
   );
 
   // Total pages: 0 = cover, 1..N = entries, N+1 = summary (if entries exist)
@@ -91,6 +164,11 @@ function App() {
   const getCategoryInfo = (catId: string) => categories.find((c) => c.id === catId);
   const getMoodEmoji = (moodLabel: string) => moods.find((m) => m.label === moodLabel)?.emoji || "";
   const getWordCount = (text: string) => !text || !text.trim() ? 0 : text.trim().split(/\s+/).length;
+  
+  // Helper to get entry field (handles both camelCase and snake_case)
+  const getEntryField = (entry: any, field: string) => {
+    return entry[field] || entry[field.replace(/([A-Z])/g, "_$1").toLowerCase()];
+  };
 
   const getDateRange = () => {
     if (sortedEntries.length === 0) return "";
@@ -146,41 +224,73 @@ function App() {
     setIsWriting(true);
   };
 
-  const handleSaveEntry = () => {
+  const handleSaveEntry = async () => {
     if (!message.trim()) return;
     const now = new Date().toISOString();
+    
     if (editingEntry) {
-      const updated = entries.map((e: any) =>
-        e.id === editingEntry.id
-          ? { ...e, sender, message: message.trim(), whatIFelt: whatIFelt.trim(), mood, category, updatedAt: now }
-          : e
-      );
-      setEntries(updated);
-      // Find the new page index for this entry
-      const newSorted = [...updated].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      const newIdx = newSorted.findIndex((e: any) => e.id === editingEntry.id);
-      setIsWriting(false);
-      goToPage(newIdx + 1);
-    } else {
-      const newEntry = {
-        id: Date.now().toString(), sender, message: message.trim(), whatIFelt: whatIFelt.trim(),
-        mood, category, createdAt: now, updatedAt: now,
+      // Update existing entry in Supabase
+      const updates = {
+        sender,
+        message: message.trim(),
+        what_i_felt: whatIFelt.trim(),
+        mood,
+        category,
+        updated_at: now,
       };
-      const updated = [...entries, newEntry];
-      setEntries(updated);
-      const newSorted = [...updated].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      const newIdx = newSorted.findIndex((e: any) => e.id === newEntry.id);
-      setIsWriting(false);
-      setTimeout(() => goToPage(newIdx + 1), 100);
+      const updatedEntry = await updateEntryInSupabase(editingEntry.id, updates);
+      
+      if (updatedEntry) {
+        // Update local state
+        const updated = entries.map((e: any) =>
+          e.id === editingEntry.id ? { ...e, ...updates, whatIFelt: whatIFelt.trim(), updatedAt: now } : e
+        );
+        setEntries(updated);
+        const newSorted = [...updated].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        const newIdx = newSorted.findIndex((e: any) => e.id === editingEntry.id);
+        setIsWriting(false);
+        goToPage(newIdx + 1);
+      }
+    } else {
+      // Insert new entry to Supabase
+      const newEntry = {
+        sender,
+        message: message.trim(),
+        what_i_felt: whatIFelt.trim(),
+        mood,
+        category,
+        created_at: now,
+        updated_at: now,
+      };
+      const savedEntry = await saveEntryToSupabase(newEntry);
+      
+      if (savedEntry) {
+        // Add to local state with mapped fields
+        const localEntry = {
+          ...savedEntry,
+          whatIFelt: savedEntry.what_i_felt,
+          createdAt: savedEntry.created_at,
+          updatedAt: savedEntry.updated_at,
+        };
+        const updated = [...entries, localEntry];
+        setEntries(updated);
+        const newSorted = [...updated].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        const newIdx = newSorted.findIndex((e: any) => e.id === savedEntry.id);
+        setIsWriting(false);
+        setTimeout(() => goToPage(newIdx + 1), 100);
+      }
     }
   };
 
-  const handleDeleteEntry = (id: string) => {
+  const handleDeleteEntry = async (id: string) => {
     if (window.confirm("Tear out this page? This cannot be undone.")) {
-      const updated = entries.filter((e: any) => e.id !== id);
-      setEntries(updated);
-      if (currentPage > 0) {
-        goToPage(Math.min(currentPage, updated.length));
+      const success = await deleteEntryFromSupabase(id);
+      if (success) {
+        const updated = entries.filter((e: any) => e.id !== id);
+        setEntries(updated);
+        if (currentPage > 0) {
+          goToPage(Math.min(currentPage, updated.length));
+        }
       }
     }
   };
@@ -198,25 +308,27 @@ function App() {
     text += `### Date: ${getDateRange()}\n\n`;
 
     categories.forEach((cat) => {
-      const catEntries = sortedEntries.filter((e: any) => e.category === cat.id);
+      const catEntries = sortedEntries.filter((e: any) => getEntryField(e, "category") === cat.id);
       if (catEntries.length === 0) return;
       text += `---\n\n#### ${cat.emoji} ${cat.name}\n\n`;
       catEntries.forEach((entry: any) => {
         const senderLabel = entry.sender === "Deep" ? "Deep" : "🫰🫶🏻Chota Don❣️❤️😘";
-        text += `- Message: [${formatDateTime(entry.createdAt)}] - ${senderLabel}: "${entry.message}"\n`;
-        if (entry.whatIFelt) text += `  What I felt: ${entry.whatIFelt}\n`;
+        text += `- Message: [${formatDateTime(getEntryField(entry, "createdAt"))}] - ${senderLabel}: "${entry.message}"\n`;
+        const whatIFelt = getEntryField(entry, "whatIFelt");
+        if (whatIFelt) text += `  What I felt: ${whatIFelt}\n`;
         if (entry.mood) text += `  Mood: ${entry.mood} ${getMoodEmoji(entry.mood)}\n`;
         text += `\n`;
       });
     });
 
-    const uncategorized = sortedEntries.filter((e: any) => !e.category);
+    const uncategorized = sortedEntries.filter((e: any) => !getEntryField(e, "category"));
     if (uncategorized.length > 0) {
       text += `---\n\n#### 📝 Uncategorized\n\n`;
       uncategorized.forEach((entry: any) => {
         const senderLabel = entry.sender === "Deep" ? "Deep" : "🫰🫶🏻Chota Don❣️❤️😘";
-        text += `- Message: [${formatDateTime(entry.createdAt)}] - ${senderLabel}: "${entry.message}"\n`;
-        if (entry.whatIFelt) text += `  What I felt: ${entry.whatIFelt}\n`;
+        text += `- Message: [${formatDateTime(getEntryField(entry, "createdAt"))}] - ${senderLabel}: "${entry.message}"\n`;
+        const whatIFelt = getEntryField(entry, "whatIFelt");
+        if (whatIFelt) text += `  What I felt: ${whatIFelt}\n`;
         if (entry.mood) text += `  Mood: ${entry.mood} ${getMoodEmoji(entry.mood)}\n`;
         text += `\n`;
       });
@@ -229,8 +341,8 @@ function App() {
 
   const generateSummary = () => {
     if (sortedEntries.length === 0) return "No entries yet.";
-    const totalWords = sortedEntries.reduce((sum, e) => sum + getWordCount(e.message) + getWordCount(e.whatIFelt || ""), 0);
-    const categoriesUsed = [...new Set(sortedEntries.map((e: any) => e.category).filter(Boolean))];
+    const totalWords = sortedEntries.reduce((sum, e) => sum + getWordCount(e.message) + getWordCount(getEntryField(e, "whatIFelt") || ""), 0);
+    const categoriesUsed = [...new Set(sortedEntries.map((e: any) => getEntryField(e, "category")).filter(Boolean))];
     const deepCount = sortedEntries.filter((e: any) => e.sender === "Deep").length;
     const chotaCount = sortedEntries.filter((e: any) => e.sender === "Chota Don").length;
     return `📖 This diary contains ${sortedEntries.length} messages spanning from ${getDateRange()}, with a total of ${totalWords} words written across ${categoriesUsed.length} different categories. Deep shared ${deepCount} messages and 🫰🫶🏻Chota Don❣️❤️😘 shared ${chotaCount} messages. Each entry captures genuine emotions, from daily greetings and sweet compliments to deep romantic confessions and intimate moments. The "What I felt" reflections reveal the depth of connection and the emotional impact of every interaction. Through flirty banter, heartfelt conversations, and passionate exchanges, this diary preserves the essence of a relationship that is both tender and intense. Every message, whether a simple good morning or a deeply personal confession, contributes to the beautiful tapestry of memories that define this special bond between Deep and 🫰🫶🏻Chota Don❣️❤️😘.`;
@@ -272,17 +384,48 @@ function App() {
     e.target.value = "";
   };
 
-  const importJSON = (content: string) => {
+  const importJSON = async (content: string) => {
+    if (!isSupabaseConfigured()) {
+      setImportStatus("❌ Supabase not configured. Please set up your .env file.");
+      return;
+    }
+    
     const data = JSON.parse(content);
     if (data.entries && Array.isArray(data.entries)) {
-      const merged = [...data.entries, ...entries];
-      const unique = merged.filter((entry, index, self) => index === self.findIndex((e) => e.id === entry.id));
-      setEntries(unique);
-      setImportStatus(`✅ Imported ${data.entries.length} entries!`);
+      setImportStatus("⏳ Importing...");
+      
+      // Transform entries for Supabase format
+      const supabaseEntries = data.entries.map((entry: any) => ({
+        sender: entry.sender,
+        message: entry.message,
+        what_i_felt: entry.whatIFelt || entry.what_i_felt || "",
+        mood: entry.mood || "",
+        category: entry.category || "",
+        created_at: entry.createdAt || entry.created_at || new Date().toISOString(),
+        updated_at: entry.updatedAt || entry.updated_at || new Date().toISOString(),
+      }));
+      
+      // Insert to Supabase
+      const { data: insertedData, error } = await supabase
+        .from("diary_entries")
+        .insert(supabaseEntries)
+        .select();
+      
+      if (error) {
+        setImportStatus("❌ Import failed: " + error.message);
+      } else {
+        setImportStatus(`✅ Imported ${insertedData?.length || 0} entries!`);
+        await loadEntries(); // Reload from Supabase
+      }
     }
   };
 
-  const importTextFile = (content: string) => {
+  const importTextFile = async (content: string) => {
+    if (!isSupabaseConfigured()) {
+      setImportStatus("❌ Supabase not configured. Please set up your .env file.");
+      return;
+    }
+    
     const parsedEntries: any[] = [];
     const lines = content.split("\n");
     let currentEntry: any = null;
@@ -295,16 +438,18 @@ function App() {
         if (currentEntry) { currentEntry.category = currentCategory; parsedEntries.push(currentEntry); }
         const [, dateStr, senderStr, messageStr] = messageMatch;
         currentEntry = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
           sender: senderStr.trim() === "Deep" ? "Deep" : "Chota Don",
-          message: messageStr, whatIFelt: "", mood: "", category: "",
-          createdAt: new Date(dateStr).toISOString() || new Date().toISOString(),
-          updatedAt: new Date(dateStr).toISOString() || new Date().toISOString(),
+          message: messageStr, 
+          what_i_felt: "", 
+          mood: "", 
+          category: "",
+          created_at: new Date(dateStr).toISOString() || new Date().toISOString(),
+          updated_at: new Date(dateStr).toISOString() || new Date().toISOString(),
         };
         continue;
       }
       if (currentEntry && line.startsWith("What I felt:")) {
-        currentEntry.whatIFelt = line.replace("What I felt:", "").trim();
+        currentEntry.what_i_felt = line.replace("What I felt:", "").trim();
         continue;
       }
       if (currentEntry && line.startsWith("Mood:")) {
@@ -321,20 +466,29 @@ function App() {
     if (currentEntry) { currentEntry.category = currentCategory; parsedEntries.push(currentEntry); }
 
     if (parsedEntries.length > 0) {
-      const merged = [...parsedEntries, ...entries];
-      const unique = merged.filter((entry, index, self) => index === self.findIndex((e) => e.id === entry.id));
-      setEntries(unique);
-      setImportStatus(`✅ Imported ${parsedEntries.length} entries!`);
+      setImportStatus("⏳ Importing...");
+      
+      const { data: insertedData, error } = await supabase
+        .from("diary_entries")
+        .insert(parsedEntries)
+        .select();
+      
+      if (error) {
+        setImportStatus("❌ Import failed: " + error.message);
+      } else {
+        setImportStatus(`✅ Imported ${insertedData?.length || 0} entries!`);
+        await loadEntries(); // Reload from Supabase
+      }
     } else {
       setImportStatus("❌ No entries found. Check format.");
     }
   };
 
-  const handleTextImport = () => {
+  const handleTextImport = async () => {
     if (!importText.trim()) { setImportStatus("❌ Paste content first"); return; }
     try {
-      if (importText.trim().startsWith("{")) importJSON(importText);
-      else importTextFile(importText);
+      if (importText.trim().startsWith("{")) await importJSON(importText);
+      else await importTextFile(importText);
       setImportText("");
     } catch (err) { setImportStatus("❌ " + (err as Error).message); }
   };
@@ -410,6 +564,58 @@ This diary captures the beautiful journey of Deep and Chota Don...
       }
     ]
   }, null, 2);
+
+  const getSQLSchema = () => `-- ============================================
+-- DIARY APP - SUPABASE DATABASE SCHEMA
+-- ============================================
+
+-- 1. CREATE THE DIARY ENTRIES TABLE
+CREATE TABLE IF NOT EXISTS diary_entries (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  sender TEXT NOT NULL CHECK (sender IN ('Deep', 'Chota Don')),
+  message TEXT NOT NULL,
+  what_i_felt TEXT,
+  mood TEXT,
+  category TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+-- 2. CREATE INDEXES FOR BETTER PERFORMANCE
+CREATE INDEX IF NOT EXISTS idx_diary_entries_created_at 
+  ON diary_entries(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_diary_entries_category 
+  ON diary_entries(category);
+CREATE INDEX IF NOT EXISTS idx_diary_entries_sender 
+  ON diary_entries(sender);
+
+-- 3. ENABLE ROW LEVEL SECURITY (RLS)
+ALTER TABLE diary_entries ENABLE ROW LEVEL SECURITY;
+
+-- 4. CREATE RLS POLICIES
+CREATE POLICY "Allow public read access"
+  ON diary_entries FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access"
+  ON diary_entries FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update access"
+  ON diary_entries FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete access"
+  ON diary_entries FOR DELETE USING (true);
+
+-- 5. AUTO-UPDATE updated_at TRIGGER
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_diary_entries_updated_at ON diary_entries;
+CREATE TRIGGER update_diary_entries_updated_at
+  BEFORE UPDATE ON diary_entries
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();`;
 
   // ============ RENDER PAGES ============
   const renderPage = () => {
@@ -515,7 +721,18 @@ This diary captures the beautiful journey of Deep and Chota Don...
               <span className="text-amber-800/50 text-xs">❧</span>
               <div className="w-6 md:w-12 h-px bg-amber-800/40" />
             </div>
-            {sortedEntries.length > 0 && (
+            
+            {/* Loading indicator */}
+            {isLoading && (
+              <p className="font-serif text-amber-700/60 text-xs mb-2 animate-pulse">⏳ Loading entries from Supabase...</p>
+            )}
+            
+            {/* Connection status */}
+            {!isLoading && !isSupabaseConfigured() && (
+              <p className="font-serif text-red-600/70 text-[10px] md:text-xs mb-2">⚠️ Supabase not configured - click Setup below</p>
+            )}
+            
+            {sortedEntries.length > 0 && !isLoading && (
               <p className="font-serif text-amber-800/50 text-[10px] md:text-xs mb-2">📅 {getDateRange()}</p>
             )}
             <p className="font-serif text-amber-800/50 text-[10px] md:text-xs mb-3">— {new Date().getFullYear()} —</p>
@@ -536,11 +753,19 @@ This diary captures the beautiful journey of Deep and Chota Don...
                   className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
                   📋 Template
                 </button>
+                <button onClick={() => setShowSetup(!showSetup)}
+                  className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
+                  ⚙️ Setup
+                </button>
               </div>
             )}
 
             {sortedEntries.length === 0 && (
               <div className="mt-3 flex flex-col gap-1">
+                <button onClick={() => setShowSetup(!showSetup)}
+                  className="px-3 py-1 text-amber-800/60 hover:text-amber-900 font-serif text-[10px] md:text-xs hover:bg-amber-100/50 rounded">
+                  ⚙️ Supabase Setup
+                </button>
                 <button onClick={() => setShowImportExport(!showImportExport)}
                   className="px-3 py-1 text-amber-800/60 hover:text-amber-900 font-serif text-[10px] md:text-xs hover:bg-amber-100/50 rounded">
                   📥 Import Existing Diary
@@ -636,6 +861,80 @@ This diary captures the beautiful journey of Deep and Chota Don...
 {(templateFormat === "text" ? getTextTemplate() : getJSONTemplate()).substring(0, 1200)}...
                   </pre>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Setup overlay */}
+          {showSetup && (
+            <div className="absolute inset-0 bg-[#faf6ee]/97 backdrop-blur-sm z-20 overflow-y-auto">
+              <div className="p-5 md:p-8 max-w-2xl mx-auto">
+                <div className="flex items-center justify-between mb-3 border-b border-amber-300/50 pb-2">
+                  <h2 className="font-serif text-base md:text-lg text-amber-900 font-bold">⚙️ Supabase Setup</h2>
+                  <button onClick={() => setShowSetup(false)} className="text-amber-600 hover:text-amber-800 text-lg p-1">✕</button>
+                </div>
+
+                {/* Connection Status */}
+                <div className={`mb-4 p-3 rounded-sm border ${isSupabaseConfigured() ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+                  <p className={`font-serif text-xs font-bold ${isSupabaseConfigured() ? 'text-green-800' : 'text-red-800'}`}>
+                    {isSupabaseConfigured() ? '✅ Connected to Supabase' : '❌ Supabase Not Configured'}
+                  </p>
+                  <p className="font-serif text-[10px] text-amber-700 mt-1">
+                    {isSupabaseConfigured() 
+                      ? 'Your diary entries are being saved to Supabase cloud database.'
+                      : 'Please configure your Supabase credentials in the .env file.'}
+                  </p>
+                </div>
+
+                {/* Setup Instructions */}
+                <div className="mb-4">
+                  <h3 className="font-serif text-sm text-amber-900 font-bold mb-2">📖 Setup Instructions</h3>
+                  <ol className="font-serif text-xs text-amber-800 space-y-2 ml-4 list-decimal">
+                    <li>Go to <a href="https://supabase.com/dashboard/" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Supabase Dashboard</a> and create a new project</li>
+                    <li>Go to <strong>SQL Editor</strong> → <strong>New Query</strong></li>
+                    <li>Copy the SQL code below and paste it into the editor</li>
+                    <li>Click <strong>Run</strong> to create the database tables</li>
+                    <li>Go to <strong>Settings</strong> → <strong>API</strong> and copy your <strong>Project URL</strong> and <strong>anon/public key</strong></li>
+                    <li>Create a <code className="bg-amber-100 px-1 rounded">.env</code> file in your project root with:
+                      <pre className="mt-1 p-2 bg-stone-100 rounded text-[10px] overflow-x-auto">
+{`VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here`}
+                      </pre>
+                    </li>
+                    <li>Restart your dev server</li>
+                  </ol>
+                </div>
+
+                {/* SQL Code */}
+                <div className="mb-4">
+                  <h3 className="font-serif text-sm text-amber-900 font-bold mb-2">📝 SQL Schema Code</h3>
+                  <p className="font-serif text-[10px] text-amber-700 mb-2">Copy this SQL and run it in Supabase SQL Editor:</p>
+                  <div className="rounded-sm bg-stone-900 border border-stone-700 p-3 overflow-x-auto max-h-96">
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="font-mono text-stone-400 text-[9px]">supabase-schema.sql</p>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(getSQLSchema());
+                          setImportStatus("✅ SQL code copied to clipboard!");
+                        }}
+                        className="px-2 py-1 bg-amber-700 hover:bg-amber-600 text-amber-50 rounded text-[9px] font-serif"
+                      >
+                        📋 Copy
+                      </button>
+                    </div>
+                    <pre className="font-mono text-[8px] md:text-[10px] text-green-400 whitespace-pre-wrap leading-relaxed">
+{getSQLSchema()}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* Status Message */}
+                {importStatus && (
+                  <div className="p-2 rounded-sm bg-amber-100/60 border border-amber-300/40 font-serif text-xs text-amber-900">
+                    {importStatus}
+                    <button onClick={() => setImportStatus("")} className="ml-2 text-amber-600">✕</button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -736,15 +1035,15 @@ This diary captures the beautiful journey of Deep and Chota Don...
           <div className="mb-2">
             <p className="font-serif text-[11px] md:text-xs text-amber-600/60 italic mb-1">Message:</p>
             <p className="font-serif text-xs md:text-sm text-amber-900/90 leading-[32px]">
-              <span className="text-amber-700/70 text-[10px] md:text-[11px]">[{formatDateTime(entry.createdAt)}]</span>{" "}
+              <span className="text-amber-700/70 text-[10px] md:text-[11px]">[{formatDateTime(getEntryField(entry, "createdAt"))}]</span>{" "}
               <span className="font-bold text-amber-900">{entry.sender === "Deep" ? "Deep" : "🫰🫶🏻Chota Don❣️❤️😘"}:</span>{" "}
               <span className="italic">"{entry.message}"</span>
             </p>
           </div>
-          {entry.whatIFelt ? (
+          {getEntryField(entry, "whatIFelt") ? (
             <div className="mt-3 pl-3 md:pl-4 border-l-2 border-amber-300/50">
               <p className="font-serif text-[11px] md:text-xs text-amber-700/70 font-bold mb-1">💭 What I felt:</p>
-              <p className="font-serif text-xs md:text-sm text-amber-800/70 italic leading-[28px]">{entry.whatIFelt}</p>
+              <p className="font-serif text-xs md:text-sm text-amber-800/70 italic leading-[28px]">{getEntryField(entry, "whatIFelt")}</p>
             </div>
           ) : (
             <div className="mt-3 pl-3 md:pl-4 border-l-2 border-amber-200/30">
