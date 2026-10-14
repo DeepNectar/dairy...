@@ -141,9 +141,9 @@ function App() {
     }
   );
 
-  // Total pages: 0 = cover, 1..N = entries, N+1 = summary (if entries exist)
-  const totalPages = sortedEntries.length > 0 ? sortedEntries.length + 2 : 1;
-  // Page 0 = cover, Page 1..N = entries, Page N+1 = summary
+  // Total pages: 0 = cover, 1 = all entries (continuous), 2 = summary
+  const totalPages = sortedEntries.length > 0 ? 3 : 1;
+  // Page 0 = cover, Page 1 = all entries continuous view, Page 2 = summary
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -246,10 +246,8 @@ function App() {
           e.id === editingEntry.id ? { ...e, ...updates, whatIFelt: whatIFelt.trim(), updatedAt: now } : e
         );
         setEntries(updated);
-        const newSorted = [...updated].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        const newIdx = newSorted.findIndex((e: any) => e.id === editingEntry.id);
         setIsWriting(false);
-        goToPage(newIdx + 1);
+        goToPage(1); // Go to entries view
       }
     } else {
       // Insert new entry to Supabase
@@ -274,10 +272,8 @@ function App() {
         };
         const updated = [...entries, localEntry];
         setEntries(updated);
-        const newSorted = [...updated].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        const newIdx = newSorted.findIndex((e: any) => e.id === savedEntry.id);
         setIsWriting(false);
-        setTimeout(() => goToPage(newIdx + 1), 100);
+        setTimeout(() => goToPage(1), 100); // Go to entries view
       }
     }
   };
@@ -288,9 +284,7 @@ function App() {
       if (success) {
         const updated = entries.filter((e: any) => e.id !== id);
         setEntries(updated);
-        if (currentPage > 0) {
-          goToPage(Math.min(currentPage, updated.length));
-        }
+        goToPage(1); // Stay on entries view
       }
     }
   };
@@ -744,20 +738,27 @@ CREATE TRIGGER update_diary_entries_updated_at
             </button>
 
             {sortedEntries.length > 0 && (
-              <div className="mt-2 md:mt-3 flex flex-wrap justify-center gap-1 max-w-xs mx-auto">
-                <button onClick={() => setShowImportExport(!showImportExport)}
-                  className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
-                  📤 Import/Export
+              <>
+                <button onClick={() => goToPage(1)}
+                  className="mt-2 px-4 py-2 md:px-6 md:py-2.5 bg-amber-700/80 hover:bg-amber-700 text-amber-50 rounded-sm font-serif text-[10px] md:text-sm tracking-wider transition-all hover:shadow-lg active:scale-95"
+                  style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}>
+                  📖 Read All Entries ({sortedEntries.length})
                 </button>
-                <button onClick={() => setShowTemplate(!showTemplate)}
-                  className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
-                  📋 Template
-                </button>
-                <button onClick={() => setShowSetup(!showSetup)}
-                  className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
-                  ⚙️ Setup
-                </button>
-              </div>
+                <div className="mt-2 md:mt-3 flex flex-wrap justify-center gap-1 max-w-xs mx-auto">
+                  <button onClick={() => setShowImportExport(!showImportExport)}
+                    className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
+                    📤 Import/Export
+                  </button>
+                  <button onClick={() => setShowTemplate(!showTemplate)}
+                    className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
+                    📋 Template
+                  </button>
+                  <button onClick={() => setShowSetup(!showSetup)}
+                    className="px-2 py-1 text-amber-800/70 hover:text-amber-900 font-serif text-[9px] md:text-[11px] hover:bg-amber-100/50 rounded">
+                    ⚙️ Setup
+                  </button>
+                </div>
+              </>
             )}
 
             {sortedEntries.length === 0 && (
@@ -990,77 +991,87 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here`}
       );
     }
 
-    // Entry page
-    const entryIndex = currentPage - 1;
-    const entry = sortedEntries[entryIndex];
-    if (!entry) return null;
+    // All entries in continuous view (Page 1)
+    if (currentPage === 1 && sortedEntries.length > 0) {
+      return (
+        <div className="w-full h-full relative overflow-y-auto" style={{
+          backgroundImage: `repeating-linear-gradient(transparent, transparent 31px, #dcc9a3 31px, #dcc9a3 32px)`,
+          backgroundSize: "100% 32px", backgroundColor: "#faf6ee", backgroundPositionY: "8px",
+        }}>
+          <div className="absolute left-10 md:left-14 top-0 bottom-0 w-[1px] bg-red-400/40 pointer-events-none" />
+          <div className="absolute left-2 md:left-3 top-[10%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
+          <div className="absolute left-2 md:left-3 top-[30%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
+          <div className="absolute left-2 md:left-3 top-[50%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
+          <div className="absolute left-2 md:left-3 top-[70%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
+          <div className="absolute left-2 md:left-3 top-[90%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
 
-    return (
-      <div className="w-full h-full flex flex-col relative" style={{
-        backgroundImage: `repeating-linear-gradient(transparent, transparent 31px, #dcc9a3 31px, #dcc9a3 32px)`,
-        backgroundSize: "100% 32px", backgroundColor: "#faf6ee", backgroundPositionY: "8px",
-      }}>
-        <div className="absolute left-10 md:left-14 top-0 bottom-0 w-[1px] bg-red-400/40" />
-        <div className="absolute left-2 md:left-3 top-[20%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
-        <div className="absolute left-2 md:left-3 top-[50%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
-        <div className="absolute left-2 md:left-3 top-[80%] w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone-400/30 border border-stone-400/20" />
+          {/* Continuous entries flow */}
+          <div className="py-4 md:py-6 pr-5 md:pr-8 pb-16" style={{ paddingLeft: "clamp(3rem, 5vw, 4.5rem)" }}>
+            {sortedEntries.map((entry: any, index: number) => (
+              <div key={entry.id || index} className="mb-6 md:mb-8 relative">
+                {/* Entry header with category and mood */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  {getEntryField(entry, "category") && (
+                    <span className="text-xs md:text-sm">{getCategoryInfo(getEntryField(entry, "category"))?.emoji}</span>
+                  )}
+                  {entry.mood && <span className="text-sm md:text-base">{getMoodEmoji(entry.mood)}</span>}
+                  <span className="text-[9px] md:text-[11px] text-amber-700/70 font-serif font-bold">
+                    {getCategoryInfo(getEntryField(entry, "category"))?.name || "Uncategorized"}
+                  </span>
+                  <div className="flex gap-0.5 ml-auto">
+                    <button onClick={() => handleEditEntry(entry)} className="p-1 rounded-sm hover:bg-amber-200/40 text-amber-700/70" title="Edit">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button onClick={() => handleDeleteEntry(entry.id)} className="p-1 rounded-sm hover:bg-red-100/50 text-red-300 hover:text-red-500" title="Delete">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
 
-        {/* Page Header */}
-        <div className="pt-4 md:pt-6 pr-5 md:pr-8 pb-1 shrink-0" style={{ paddingLeft: "clamp(3rem, 5vw, 4.5rem)" }}>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {entry.category && <span className="text-xs md:text-sm">{getCategoryInfo(entry.category)?.emoji}</span>}
-              {entry.mood && <span className="text-sm md:text-base">{getMoodEmoji(entry.mood)}</span>}
-              <span className="text-[9px] md:text-[11px] text-amber-700/70 font-serif font-bold">
-                {getCategoryInfo(entry.category)?.name || "Uncategorized"}
-              </span>
-            </div>
-            <div className="flex gap-0.5 shrink-0">
-              <button onClick={() => handleEditEntry(entry)} className="p-1.5 rounded-sm hover:bg-amber-200/40 text-amber-700/70" title="Edit">
-                <svg className="w-3 h-3 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </button>
-              <button onClick={() => handleDeleteEntry(entry.id)} className="p-1.5 rounded-sm hover:bg-red-100/50 text-red-300 hover:text-red-500" title="Delete">
-                <svg className="w-3 h-3 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </div>
+                {/* Message */}
+                <div className="mb-2">
+                  <p className="font-serif text-[11px] md:text-xs text-amber-600/60 italic mb-1">Message:</p>
+                  <p className="font-serif text-xs md:text-sm text-amber-900/90 leading-[32px]">
+                    <span className="text-amber-700/70 text-[10px] md:text-[11px]">[{formatDateTime(getEntryField(entry, "createdAt"))}]</span>{" "}
+                    <span className="font-bold text-amber-900">{entry.sender === "Deep" ? "Deep" : "🫰🫶🏻Chota Don❣️❤️😘"}:</span>{" "}
+                    <span className="italic">"{entry.message}"</span>
+                  </p>
+                </div>
+
+                {/* What I felt */}
+                {getEntryField(entry, "whatIFelt") ? (
+                  <div className="mt-2 pl-3 md:pl-4 border-l-2 border-amber-300/50">
+                    <p className="font-serif text-[11px] md:text-xs text-amber-700/70 font-bold mb-1">💭 What I felt:</p>
+                    <p className="font-serif text-xs md:text-sm text-amber-800/70 italic leading-[28px]">{getEntryField(entry, "whatIFelt")}</p>
+                  </div>
+                ) : (
+                  <div className="mt-2 pl-3 md:pl-4 border-l-2 border-amber-200/30">
+                    <p className="font-serif text-[10px] md:text-[11px] text-amber-400/50 italic">(No reflection added)</p>
+                  </div>
+                )}
+
+                {/* Separator line between entries (except last) */}
+                {index < sortedEntries.length - 1 && (
+                  <div className="mt-6 md:mt-8 border-t border-amber-200/40" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Page Footer */}
+          <div className="sticky bottom-0 left-0 right-0 bg-gradient-to-t from-[#faf6ee] via-[#faf6ee] to-transparent pt-4 pb-3 px-6 md:px-10 flex justify-between items-center">
+            <span className="text-[9px] text-amber-400/40 font-serif">
+              {sortedEntries.length} {sortedEntries.length === 1 ? "entry" : "entries"}
+            </span>
+            <span className="text-[10px] text-amber-400/40 font-serif">— Page 1 —</span>
           </div>
         </div>
-
-        {/* Message Content */}
-        <div className="flex-1 overflow-y-auto pr-5 md:pr-8 pb-14" style={{ paddingLeft: "clamp(3rem, 5vw, 4.5rem)" }}>
-          <div className="mb-2">
-            <p className="font-serif text-[11px] md:text-xs text-amber-600/60 italic mb-1">Message:</p>
-            <p className="font-serif text-xs md:text-sm text-amber-900/90 leading-[32px]">
-              <span className="text-amber-700/70 text-[10px] md:text-[11px]">[{formatDateTime(getEntryField(entry, "createdAt"))}]</span>{" "}
-              <span className="font-bold text-amber-900">{entry.sender === "Deep" ? "Deep" : "🫰🫶🏻Chota Don❣️❤️😘"}:</span>{" "}
-              <span className="italic">"{entry.message}"</span>
-            </p>
-          </div>
-          {getEntryField(entry, "whatIFelt") ? (
-            <div className="mt-3 pl-3 md:pl-4 border-l-2 border-amber-300/50">
-              <p className="font-serif text-[11px] md:text-xs text-amber-700/70 font-bold mb-1">💭 What I felt:</p>
-              <p className="font-serif text-xs md:text-sm text-amber-800/70 italic leading-[28px]">{getEntryField(entry, "whatIFelt")}</p>
-            </div>
-          ) : (
-            <div className="mt-3 pl-3 md:pl-4 border-l-2 border-amber-200/30">
-              <p className="font-serif text-[10px] md:text-[11px] text-amber-400/50 italic">(No reflection added)</p>
-            </div>
-          )}
-        </div>
-
-        {/* Page Footer */}
-        <div className="absolute bottom-3 left-0 right-0 flex justify-between items-center px-6 md:px-10">
-          <span className="text-[9px] text-amber-400/40 font-serif">
-            Page {currentPage} of {totalPages - 1}
-          </span>
-          <span className="text-[10px] text-amber-400/40 font-serif">— {currentPage} —</span>
-        </div>
-      </div>
-    );
+      );
+    }
   };
 
   return (
