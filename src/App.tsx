@@ -19,6 +19,7 @@ function App() {
   const [showTemplate, setShowTemplate] = useState(false);
   const [importText, setImportText] = useState("");
   const [importStatus, setImportStatus] = useState("");
+  const [templateFormat, setTemplateFormat] = useState<"text" | "json">("text");
   const fileInputRef = useRef<any>(null);
   const messageRef = useRef<any>(null);
 
@@ -67,11 +68,6 @@ function App() {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) +
       " at " + date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   };
 
   const formatShortDate = (dateString: string) => {
@@ -231,7 +227,6 @@ function App() {
       });
     });
 
-    // Uncategorized entries
     const uncategorized = sorted.filter((e: any) => !e.category);
     if (uncategorized.length > 0) {
       text += `---\n\n`;
@@ -350,7 +345,6 @@ function App() {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
 
-      // Match message pattern: - Message: [date] - Sender: "content"
       const messageMatch = line.match(/- Message: \[(.+?)\] - (.+?): "(.+)"/);
       if (messageMatch) {
         if (currentEntry) parsedEntries.push(currentEntry);
@@ -369,20 +363,17 @@ function App() {
         continue;
       }
 
-      // Match "What I felt" pattern
       if (currentEntry && line.startsWith("What I felt:")) {
         currentEntry.whatIFelt = line.replace("What I felt:", "").trim();
         continue;
       }
 
-      // Match mood pattern
       if (currentEntry && line.startsWith("Mood:")) {
         const moodMatch = line.match(/Mood: (.+?)(?:\s+[😊😢😡😴🥰😰🤔😎])?$/);
         if (moodMatch) currentEntry.mood = moodMatch[1].trim();
         continue;
       }
 
-      // Match category heading
       const headingMatch = line.match(/^####\s+(.+?)$/);
       if (headingMatch) {
         const headingText = headingMatch[1].trim();
@@ -422,16 +413,21 @@ function App() {
       return;
     }
     try {
-      importTextFile(importText);
+      // Try JSON first
+      if (importText.trim().startsWith("{")) {
+        importJSON(importText);
+      } else {
+        importTextFile(importText);
+      }
       setImportText("");
     } catch (err) {
       setImportStatus("❌ Failed to parse: " + (err as Error).message);
     }
   };
 
-  // ==================== TEMPLATE ====================
+  // ==================== TEMPLATES ====================
 
-  const getTemplate = () => {
+  const getTextTemplate = () => {
     return `========================================
 📖 COMPLETE DIARY - DEEP & 🫰🫶🏻CHOTA DON❣️❤️😘
 ========================================
@@ -492,8 +488,72 @@ NOTES FOR FILLING THE TEMPLATE:
 `;
   };
 
-  const downloadTemplate = () => {
-    downloadFile(getTemplate(), "diary-template.txt", "text/plain");
+  const getJSONTemplate = () => {
+    const template = {
+      version: "1.0",
+      exportedAt: "2024-01-20T12:00:00.000Z",
+      entries: [
+        {
+          id: "1705312800000",
+          sender: "Deep",
+          message: "Good morning my love! Hope you have a beautiful day ahead. Thinking of you always.",
+          whatIFelt: "I felt so peaceful sending this to her. Every morning starts with her on my mind.",
+          mood: "Happy",
+          category: "greetings",
+          createdAt: "2024-01-15T07:30:00.000Z",
+          updatedAt: "2024-01-15T07:30:00.000Z"
+        },
+        {
+          id: "1705355100000",
+          sender: "Chota Don",
+          message: "Good night baby! Sweet dreams. Can't wait to talk tomorrow.",
+          whatIFelt: "Her goodnight messages make my whole night. I fall asleep with a smile.",
+          mood: "Loved",
+          category: "greetings",
+          createdAt: "2024-01-15T22:45:00.000Z",
+          updatedAt: "2024-01-15T22:45:00.000Z"
+        },
+        {
+          id: "1705418100000",
+          sender: "Deep",
+          message: "You are the most beautiful soul I have ever met. Your smile lights up my entire world.",
+          whatIFelt: "I meant every word. She truly is the most amazing person.",
+          mood: "Loved",
+          category: "compliments",
+          createdAt: "2024-01-16T15:15:00.000Z",
+          updatedAt: "2024-01-16T15:15:00.000Z"
+        },
+        {
+          id: "1705522800000",
+          sender: "Chota Don",
+          message: "Stop being so cute, it's distracting me from my work!",
+          whatIFelt: "Haha she's so adorable when she gets flustered. I love teasing her.",
+          mood: "Happy",
+          category: "flirty",
+          createdAt: "2024-01-17T20:20:00.000Z",
+          updatedAt: "2024-01-17T20:20:00.000Z"
+        },
+        {
+          id: "1705784400000",
+          sender: "Deep",
+          message: "I want you to know that you are not just my love, you are my everything. My heart beats only for you.",
+          whatIFelt: "Writing this made me emotional. She means more to me than words can express.",
+          mood: "Thoughtful",
+          category: "romantic",
+          createdAt: "2024-01-20T23:00:00.000Z",
+          updatedAt: "2024-01-20T23:00:00.000Z"
+        }
+      ]
+    };
+    return JSON.stringify(template, null, 2);
+  };
+
+  const downloadTextTemplate = () => {
+    downloadFile(getTextTemplate(), "diary-template.txt", "text/plain");
+  };
+
+  const downloadJSONTemplate = () => {
+    downloadFile(getJSONTemplate(), "diary-template.json", "application/json");
   };
 
   const closeAllOverlays = () => {
@@ -749,18 +809,18 @@ NOTES FOR FILLING THE TEMPLATE:
                           {/* Paste text option */}
                           <details className="rounded-sm border border-amber-300/40 overflow-hidden">
                             <summary className="p-2 bg-amber-100/40 font-serif text-amber-900 text-xs cursor-pointer hover:bg-amber-100/60">
-                              ✏️ Or paste text to import
+                              ✏️ Or paste text/JSON to import
                             </summary>
                             <div className="p-2">
                               <textarea
                                 value={importText}
                                 onChange={(e) => setImportText(e.target.value)}
-                                placeholder="Paste your diary text here..."
+                                placeholder="Paste your diary text or JSON here..."
                                 className="w-full h-24 p-2 text-[10px] md:text-xs font-serif text-amber-900 bg-white/50 border border-amber-300/40 rounded-sm resize-none focus:outline-none focus:border-amber-400"
                               />
                               <button onClick={handleTextImport}
                                 className="mt-1 px-3 py-1 bg-amber-800/80 hover:bg-amber-800 text-amber-50 rounded-sm font-serif text-[10px] md:text-xs">
-                                Import Pasted Text
+                                Import Pasted Content
                               </button>
                             </div>
                           </details>
@@ -782,8 +842,32 @@ NOTES FOR FILLING THE TEMPLATE:
                     <div className="absolute inset-0 bg-[#faf6ee]/97 backdrop-blur-sm z-20 overflow-y-auto">
                       <div className="p-5 md:p-8 max-w-lg mx-auto">
                         <div className="flex items-center justify-between mb-3 border-b border-amber-300/50 pb-2">
-                          <h2 className="font-serif text-base md:text-lg text-amber-900 font-bold">📋 Diary Template</h2>
+                          <h2 className="font-serif text-base md:text-lg text-amber-900 font-bold">📋 Diary Templates</h2>
                           <button onClick={() => setShowTemplate(false)} className="text-amber-600 hover:text-amber-800 text-lg p-1">✕</button>
+                        </div>
+
+                        {/* Format Toggle */}
+                        <div className="flex gap-2 mb-3">
+                          <button
+                            onClick={() => setTemplateFormat("text")}
+                            className={`flex-1 p-2 rounded-sm font-serif text-xs transition-all ${
+                              templateFormat === "text"
+                                ? "bg-amber-800/80 text-amber-50"
+                                : "bg-amber-100/50 text-amber-800 hover:bg-amber-200/50 border border-amber-200/50"
+                            }`}
+                          >
+                            📄 Text Format
+                          </button>
+                          <button
+                            onClick={() => setTemplateFormat("json")}
+                            className={`flex-1 p-2 rounded-sm font-serif text-xs transition-all ${
+                              templateFormat === "json"
+                                ? "bg-amber-800/80 text-amber-50"
+                                : "bg-amber-100/50 text-amber-800 hover:bg-amber-200/50 border border-amber-200/50"
+                            }`}
+                          >
+                            { } JSON Format
+                          </button>
                         </div>
 
                         <div className="mb-3 p-3 rounded-sm bg-amber-50 border border-amber-200/60">
@@ -798,15 +882,18 @@ NOTES FOR FILLING THE TEMPLATE:
                           </ul>
                         </div>
 
-                        <button onClick={downloadTemplate}
+                        <button
+                          onClick={templateFormat === "text" ? downloadTextTemplate : downloadJSONTemplate}
                           className="w-full mb-3 p-3 rounded-sm bg-amber-800/80 hover:bg-amber-800 text-amber-50 font-serif text-xs md:text-sm transition-colors flex items-center justify-center gap-2">
-                          <span>⬇️</span> Download Template File
+                          <span>⬇️</span> Download {templateFormat === "text" ? "Text" : "JSON"} Template
                         </button>
 
-                        <div className="rounded-sm bg-white/60 border border-amber-300/40 p-3 overflow-x-auto">
-                          <p className="font-serif text-amber-700/70 text-[9px] md:text-[10px] mb-2 italic">Preview:</p>
-                          <pre className="font-mono text-[8px] md:text-[10px] text-amber-900/80 whitespace-pre-wrap leading-relaxed">
-{getTemplate().substring(0, 800)}...
+                        <div className="rounded-sm bg-stone-900 border border-stone-700 p-3 overflow-x-auto">
+                          <p className="font-mono text-stone-400 text-[9px] md:text-[10px] mb-2">
+                            {templateFormat === "text" ? "diary-template.txt" : "diary-template.json"}
+                          </p>
+                          <pre className="font-mono text-[8px] md:text-[10px] text-green-400 whitespace-pre-wrap leading-relaxed">
+{templateFormat === "text" ? getTextTemplate().substring(0, 1000) + "\n..." : getJSONTemplate().substring(0, 1200) + "\n..."}
                           </pre>
                         </div>
                       </div>
